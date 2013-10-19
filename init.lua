@@ -92,7 +92,7 @@ minetest.register_node("tb_furnace:s_furnace", {
 			local srclist = inv:get_list("src")
 			local cooked, aftercooked = nil
 			cooked, aftercooked = minetest.get_craft_result({method = "cooking", width = 1, items = srclist})
-			src_list_results['amount'] = math.floor( cooked.time / src_diff )
+			src_list_results['amount'] = math.floor( src_diff / cooked.time )
 			src_list_results['time'] = cooked.time
 			src_list_results['total_time'] = cooked.time * src_list_results['amount']
 			local temp_stack, total_items = nil, 0
@@ -103,31 +103,41 @@ minetest.register_node("tb_furnace:s_furnace", {
 				end
 			end
 			src_list_results['item_amount'] = total_items
+			print( 'src_list_results.item_amount: '..src_list_results.item_amount )
+			print( 'src_list_results.amount: '..src_list_results.amount )
 			if src_list_results.item_amount < src_list_results.amount then
 				-- we don't have enough items, so manipulate items a bit
 				src_list_results.amount = src_list_results.item_amount
 				-- disable cooking due to missing source items
+				print( 'Switched to inactive state...1' )
 				meta:set_int( 'cooking_state', 0 )
 			end
+			print( 'src_list_results.amount after changing: '..src_list_results.amount )
 			-- fuel
 			local fuel_list_results = {}
 			local fuellist = inv:get_list('fuel')
 			local fuel, afterfuel = nil
 			fuel, afterfuel = minetest.get_craft_result({method = "fuel", width = 1, items = fuellist})
-			fuel_list_results['amount'] = math.floor( fuel.time / fuel_diff )
+			fuel_list_results['amount'] = math.floor( fuel_diff / fuel.time )
 			fuel_list_results['time'] = fuel.time
 			fuel_list_results['total_time'] = fuel.time * fuel_list_results['amount']
 			temp_stack, total_items = nil, 0
 			for index = 1, 4, 1 do
-				temp_stack = inv:get_stack( 'src', index )
+				temp_stack = inv:get_stack( 'fuel', index )
 				if not temp_stack:is_empty() then
 					total_items = total_items + temp_stack:get_count()
 				end
 			end
+			if not fuel.item or fuel.item == nil then
+				print( 'fuel.item could not be detected...' )
+			end
 			fuel_list_results['item_amount'] = total_items
+			print( 'fuel_list_results.item_amount: '..fuel_list_results.item_amount )
+			print( 'fuel_list_results.amount: '..fuel_list_results.amount )
 			if fuel_list_results.item_amount < fuel_list_results.amount then
 				-- we don't have enough items, so manipulate items a bit
 				fuel_list_results.amount = fuel_list_results.item_amount
+				print( 'Switched to inactive state...2' )
 				meta:set_int( 'cooking_state', 0 )
 			end
 			-- dst
@@ -139,9 +149,11 @@ minetest.register_node("tb_furnace:s_furnace", {
 					total_items = total_items + temp_stack:get_free_space()
 				end
 			end
+			total_items = ( cooked.item:get_stack_max() * inv:get_size( 'dst' ) ) - total_items
 			dst_list['free_space'] = total_items
 			-- Time to see how much results we cooked
-			if fuel_list_results['total_time'] < src_list_results['total_time'] then
+			if fuel_list_results['total_time'] < src_list_results['total_time'] and fuel_list_results.total_time ~= 0 then
+				print( 'Fuel total time lower than src total time? :'..fuel_list_results.total_time..' : '..src_list_results.total_time )
 				-- we didn't had enough fuel to cook all items, correct value
 				src_list_results['total_time'] = fuel_list_results['total_time']
 				src_list_results['amount'] = math.floor( src_list_results['total_time'] / src_list_results['time'] )
@@ -150,6 +162,7 @@ minetest.register_node("tb_furnace:s_furnace", {
 				fuel_list_results['total_time'] = src_list_results['total_time']
 				fuel_list_results['amount'] = math.floor( fuel_list_results['total_time'] / fuel_list_results['time'] )
 			end
+			print( 'Src amount: '..src_list_results['amount']..' Dst place: '..dst_list.free_space )
 			if dst_list.free_space < ( src_list_results['amount'] * cooked.item:get_count() ) then
 				-- we also have to correct the free space amount -_-
 				src_list_results['amount'] = math.floor( total_items / cooked.item:get_count() )
@@ -166,7 +179,12 @@ minetest.register_node("tb_furnace:s_furnace", {
 				temp_stack.count = total_items
 				temp_stack = ItemStack( temp_stack )
 				inv:add_item( 'dst', temp_stack )
-				temp_stack = cooked.item:to_table()
+				temp_stack = aftercooked.items[1]:to_table()
+				if temp_stack == nil then
+					for key, value in pairs( aftercooked.items ) do
+						print( key, value:to_table() )
+					end
+				end
 				temp_stack.count = src_list_results['amount']
 				temp_stack = ItemStack( temp_stack )
 				inv:remove_item( 'src', temp_stack )
